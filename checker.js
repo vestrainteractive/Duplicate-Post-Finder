@@ -1,84 +1,48 @@
-jQuery(document).ready(function ($) {
-    $('#check-duplicates').on('click', function () {
-        const $results = $('#duplicate-results');
-        const $statusBar = $('#status-bar');
-        const $progressBar = $('#progress-bar');
-        const $progressPercent = $('#progress-percent');
-        const $statusMessage = $('#status-message');
-        const $debugLog = $('#debug-log');
+function check_duplicates() {
+    // For debugging purposes
+    error_log('Starting duplicate check...');
 
-        let isProcessing = false;
-        let timeout;
+    // Get drafts and pending posts
+    $args = array(
+        'post_type' => 'post',
+        'post_status' => array('draft', 'pending'),
+        'posts_per_page' => -1,  // Retrieve all drafts and pending posts
+    );
 
-        // Reset UI
-        $results.empty();
-        $statusBar.show();
-        $progressBar.width('0%');
-        $progressPercent.text('0%');
-        $statusMessage.text('Initializing duplicate check...').css('color', '');
-        $debugLog.hide().text('');
+    $posts_query = new WP_Query($args);
 
-        // Timeout logic: After 30 seconds, check if progress has started
-        timeout = setTimeout(() => {
-            if (!isProcessing) {
-                $statusMessage.text('Error: No response from server within 30 seconds.').css('color', 'red');
-                $debugLog.show().append('Timeout reached: No progress after 30 seconds.\n');
+    if (!$posts_query->have_posts()) {
+        error_log('No drafts or pending posts found.');
+        wp_send_json_error('No drafts or pending posts found.');
+    }
+
+    $duplicates = array();
+    $posts_data = [];
+
+    // Collect post data
+    while ($posts_query->have_posts()) {
+        $posts_query->the_post();
+        $posts_data[] = array(
+            'ID' => get_the_ID(),
+            'title' => get_the_title(),
+            'link' => get_the_permalink(),
+            'status' => get_post_status(),
+            'content' => get_the_content(),
+        );
+    }
+
+    // Check for duplicates
+    foreach ($posts_data as $draft_post) {
+        foreach ($posts_data as $published_post) {
+            if ($draft_post['ID'] !== $published_post['ID'] && $draft_post['content'] === $published_post['content']) {
+                $duplicates[] = array(
+                    'draft_or_pending' => $draft_post,
+                    'published' => $published_post,
+                );
             }
-        }, 30000);
+        }
+    }
 
-        // Start AJAX request
-        $.post(checker_vars.ajax_url, { action: 'check_duplicates' })
-            .done(function (response) {
-                clearTimeout(timeout); // Clear timeout once the server responds
-
-                if (response.success) {
-                    const duplicates = response.data.duplicates;
-                    const totalItems = duplicates.length;
-                    let processedItems = 0;
-
-                    if (totalItems === 0) {
-                        $statusMessage.text('No duplicates found.');
-                        $progressBar.width('100%');
-                        $progressPercent.text('100%');
-                        $debugLog.show().append('No duplicates found.\n');
-                        return;
-                    }
-
-                    isProcessing = true;
-
-                    duplicates.forEach((pair, index) => {
-                        setTimeout(() => {
-                            processedItems++;
-                            const progress = Math.round((processedItems / totalItems) * 100);
-                            $progressBar.width(progress + '%');
-                            $progressPercent.text(progress + '%');
-
-                            if (index === 0) {
-                                $results.append('<table class="widefat fixed"><thead><tr><th>Draft/Pending Post</th><th>Published Post</th></tr></thead><tbody></tbody></table>');
-                            }
-                            const $tbody = $results.find('tbody');
-                            $tbody.append(`<tr>
-                                <td><a href="${pair.draft_or_pending.link}" target="_blank">${pair.draft_or_pending.title} (${pair.draft_or_pending.status})</a></td>
-                                <td><a href="${pair.published.link}" target="_blank">${pair.published.title}</a></td>
-                            </tr>`);
-
-                            if (processedItems === totalItems) {
-                                $statusMessage.text('Duplicate check complete!');
-                                $debugLog.show().append('Duplicate check complete.\n');
-                            }
-                        }, index * 100);
-                    });
-                } else {
-                    $statusMessage.text('Error: ' + (response.data || 'Unknown error.')).css('color', 'red');
-                    $debugLog.show().append('Error: ' + (response.data || 'Unknown error.') + '\n');
-                }
-            })
-            .fail(function (jqXHR, textStatus, errorThrown) {
-                clearTimeout(timeout); // Clear timeout on failure
-                const errorMessage = 'AJAX request failed: ' + textStatus + ' (' + errorThrown + ')';
-                $statusMessage.text(errorMessage).css('color', 'red');
-                $debugLog.show().append(errorMessage + '\n');
-                console.error(jqXHR.responseText);
-            });
-    });
-});
+    wp_send_json_success(array('duplicates' => $duplicates));
+}
+add_action('wp_ajax_check_duplicates', 'check_duplicates');
