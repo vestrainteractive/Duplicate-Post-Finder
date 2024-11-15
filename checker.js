@@ -18,10 +18,10 @@ jQuery(document).ready(function ($) {
                     duplicates.forEach(pair => {
                         html += `<tr>
                             <td>
-                                <a href="${pair.draft_or_pending.edit_link}" target="_blank">${pair.draft_or_pending.post_title} (${pair.draft_or_pending.post_status})</a>
+                                <a href="${pair.draft_or_pending.link}" target="_blank">${pair.draft_or_pending.title} (${pair.draft_or_pending.status})</a>
                             </td>
                             <td>
-                                <a href="${pair.published.edit_link}" target="_blank">${pair.published.post_title}</a>
+                                <a href="${pair.published.link}" target="_blank">${pair.published.title}</a>
                             </td>
                         </tr>`;
                     });

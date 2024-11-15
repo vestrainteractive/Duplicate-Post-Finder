@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: Draft and Duplicate Post Checker
- * Description: Displays draft and pending posts alongside published posts that appear to be duplicates, with options for multi-select and bulk actions.
+ * Description: Displays draft, pending posts alongside published posts that appear to be duplicates, with options for multi-select and bulk actions.
  * Version: 1.1
  * Author: Vestra Interactive
  */
@@ -29,11 +29,26 @@ class DraftDuplicatePostChecker {
     }
 
     public function enqueue_scripts($hook) {
+        // Check that we're on the correct admin page
         if ($hook === 'toplevel_page_draft-duplicate-posts') {
-            wp_enqueue_script('jquery');
-            wp_enqueue_script('wp-util');
-            wp_enqueue_script('draft-duplicate-checker', plugin_dir_url(__FILE__) . 'checker.js', ['jquery', 'wp-util'], '1.1', true);
-            wp_enqueue_style('draft-duplicate-checker-style', plugin_dir_url(__FILE__) . 'checker.css');
+            $plugin_url = plugin_dir_url(__FILE__);
+
+            // Enqueue JavaScript
+            wp_enqueue_script(
+                'draft-duplicate-checker',
+                $plugin_url . 'checker.js',
+                ['jquery', 'wp-util'],
+                '1.1',
+                true
+            );
+
+            // Enqueue CSS
+            wp_enqueue_style(
+                'draft-duplicate-checker-style',
+                $plugin_url . 'checker.css',
+                [],
+                '1.1'
+            );
         }
     }
 
@@ -54,7 +69,7 @@ class DraftDuplicatePostChecker {
 
 new DraftDuplicatePostChecker();
 
-// AJAX handler to retrieve duplicate posts.
+// AJAX handler to retrieve duplicate posts
 add_action('wp_ajax_check_duplicates', 'check_duplicates_ajax_handler');
 
 function check_duplicates_ajax_handler() {
@@ -80,8 +95,17 @@ function check_duplicates_ajax_handler() {
             if (strcasecmp($draft_or_pending->post_title, $published->post_title) === 0 ||
                 similar_text($draft_or_pending->post_content, $published->post_content, $percent) && $percent > 90) {
                 $duplicates[] = [
-                    'draft_or_pending' => $draft_or_pending,
-                    'published' => $published,
+                    'draft_or_pending' => [
+                        'id'    => $draft_or_pending->ID,
+                        'title' => $draft_or_pending->post_title,
+                        'status'=> $draft_or_pending->post_status,
+                        'link'  => get_edit_post_link($draft_or_pending->ID)
+                    ],
+                    'published' => [
+                        'id'    => $published->ID,
+                        'title' => $published->post_title,
+                        'link'  => get_edit_post_link($published->ID)
+                    ],
                 ];
             }
         }
